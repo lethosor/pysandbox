@@ -55,7 +55,7 @@ class SandboxThread(threading.Thread):
         self.error = None
     def run(self):
         try:
-            exec(self.code, {}, self.vars)
+            exec(self.code, self.vars, {})
         except Exception as e:
             if hasattr(e, 'lineno'):
                 line = e.lineno

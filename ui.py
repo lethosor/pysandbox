@@ -67,11 +67,15 @@ class Console(tk.Toplevel):
         self.after(10, self.code_process)
 
     def code_process(self):
+        i = 0
         while True:
             func = None
             try:
-                func = self.func_queue.get(block=False)
+                func = self.func_queue.get(timeout=0.01)
                 func.call()
+                i += 1
+                if i > 10:
+                    break
             except queue.Empty:
                 break
             except Exception as e:
@@ -80,7 +84,7 @@ class Console(tk.Toplevel):
                     func.interrupt()
                 break
         if not self.code_thread.complete:
-            self.after(10, self.code_process)
+            self.after(1, self.code_process)
         else:
             if self.code_thread.error is not None:
                 self.print_error('Error: line %s: %s',
@@ -93,6 +97,7 @@ class Console(tk.Toplevel):
         out = str(fmt) % args
         self.field.insert('end', out, kwargs.get('tags', ()))
         self.field.insert('end', '\n')
+        self.field.see('end')
 
     def print_error(self, fmt, *args):
         self.print_(fmt, *args, tags=('error',))
