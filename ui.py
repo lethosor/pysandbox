@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import sys
+import threading
 import time
 import traceback
 if sys.version.startswith('2'):
@@ -63,13 +64,13 @@ class Console(tk.Toplevel):
         vars['sleep'] = time.sleep
         self.code_thread = sandbox.SandboxThread(code, vars)
         self.code_thread.start()
-        self.after_idle(self.code_process)
+        self.after(10, self.code_process)
 
     def code_process(self):
         while True:
             func = None
             try:
-                func = self.func_queue.get(timeout=0.01)
+                func = self.func_queue.get(block=False)
                 func.call()
             except queue.Empty:
                 break
@@ -79,7 +80,7 @@ class Console(tk.Toplevel):
                     func.interrupt()
                 break
         if not self.code_thread.complete:
-            self.after_idle(self.code_process)
+            self.after(10, self.code_process)
         else:
             if self.code_thread.error is not None:
                 self.print_error('Error: line %s: %s',

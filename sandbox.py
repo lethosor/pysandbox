@@ -47,6 +47,7 @@ wrap_function = create_function_wrapper(QueuedFunction)
 wrap_callback_function = create_function_wrapper(QueuedCallback)
 
 class SandboxThread(threading.Thread):
+    daemon = True
     def __init__(self, code, vars):
         super(SandboxThread, self).__init__()
         self.code, self.vars = code, vars
