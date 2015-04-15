@@ -1,7 +1,12 @@
 from __future__ import print_function
 
 import sys
+import time
 import traceback
+if sys.version.startswith('2'):
+    import Queue as queue
+else:
+    import queue
 
 import sandbox
 import tkwrapper as tk
@@ -47,22 +52,49 @@ class Console(tk.Toplevel):
         }
         self.field = tk.Text(self)
         self.field.grid(row=2, column=1, sticky='nsew')
+        self.field.tag_config('error', foreground='red')
+        self.func_queue = queue.Queue()
 
     def run(self, code):
+        wrap = lambda func: sandbox.wrap_function(func, self.func_queue)
         vars = {}
-        vars['print'] = self.print_
-        vars['clear'] = self.clear
-        try:
-            exec(code, {}, vars)
-        except Exception as e:
-            _, _, tb = sys.exc_info()
-            self.print_('Error on line %i: %s', traceback.extract_tb(tb)[-1][1], e)
+        vars['print'] = wrap(self.print_)
+        vars['clear'] = wrap(self.clear)
+        vars['sleep'] = time.sleep
+        self.code_thread = sandbox.SandboxThread(code, vars)
+        self.code_thread.start()
+        self.after_idle(self.code_process)
+
+    def code_process(self):
+        while True:
+            func = None
+            try:
+                func = self.func_queue.get(timeout=0.01)
+                func.call()
+            except queue.Empty:
+                break
+            except Exception as e:
+                self.code_thread.set_error(e, func.lineno if func else None)
+                if func is not None:
+                    func.interrupt()
+                break
+        if not self.code_thread.complete:
+            self.after_idle(self.code_process)
+        else:
+            if self.code_thread.error is not None:
+                self.print_error('Error: line %s: %s',
+                    self.code_thread.error_line, self.code_thread.error)
 
     def clear(self):
         self.field.delete(1.0, 'end')
 
-    def print_(self, fmt, *args):
-        self.field.insert('end', str(fmt) % args)
+    def print_(self, fmt, *args, **kwargs):
+        out = str(fmt) % args
+        self.field.insert('end', out, kwargs.get('tags', ()))
+        self.field.insert('end', '\n')
+
+    def print_error(self, fmt, *args):
+        self.print_(fmt, *args, tags=('error',))
 
 def init():
     global root
