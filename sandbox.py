@@ -6,7 +6,7 @@ import traceback
 class QueuedFunction(object):
     def __init__(self, func, args, kwargs):
         self.func, self.args, self.kwargs = func, args, kwargs
-        frames = filter(lambda frame: frame[0] == '<string>', traceback.extract_stack())
+        frames = list(filter(lambda frame: frame[0] == '<string>', traceback.extract_stack()))
         if len(frames):
             self.lineno = frames[0][1]
         self.called = False
@@ -28,8 +28,9 @@ class QueuedFunction(object):
 
 class QueuedCallback(QueuedFunction):
     def call(self):
-        self.func(self.complete, *self.args, **self.kwargs)
-    def complete(self, retval):
+        self.func(self, *self.args, **self.kwargs)
+
+    def callback(self, retval):
         self.retval = retval
         self.called = True
         self.event.set()
@@ -37,7 +38,7 @@ class QueuedCallback(QueuedFunction):
 def create_function_wrapper(cls):
     def outer(func, queue):
         def wrapper(*args, **kwargs):
-            q = QueuedFunction(func, args, kwargs)
+            q = cls(func, args, kwargs)
             queue.put(q)
             return q.wait()
         return wrapper

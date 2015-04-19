@@ -53,15 +53,19 @@ class Console(tk.Toplevel):
         }
         self.field = tk.Text(self)
         self.field.grid(row=2, column=1, sticky='nsew')
+        self.input_active = False
+        self.field.bind('<Return>', self.input_submit)
         self.field.tag_config('error', foreground='red')
         self.func_queue = queue.Queue()
 
     def run(self, code):
         wrap = lambda func: sandbox.wrap_function(func, self.func_queue)
+        cwrap = lambda func: sandbox.wrap_callback_function(func, self.func_queue)
         vars = {}
         vars['print'] = wrap(self.print_)
         vars['clear'] = wrap(self.clear)
         vars['sleep'] = time.sleep
+        vars['input'] = cwrap(self.input)
         self.code_thread = sandbox.SandboxThread(code, vars)
         self.code_thread.start()
         self.after(10, self.code_process)
@@ -90,17 +94,42 @@ class Console(tk.Toplevel):
                 self.print_error('Error: line %s: %s',
                     self.code_thread.error_line, self.code_thread.error)
 
+    def raise_error(self, *args, **kwargs):
+        self.code_thread.set_error(*args, **kwargs)
+
     def clear(self):
         self.field.delete(1.0, 'end')
+        if self.input_active:
+            self.print_(self.input_prompt, newline=False)
 
     def print_(self, fmt, *args, **kwargs):
         out = str(fmt) % args
         self.field.insert('end', out, kwargs.get('tags', ()))
-        self.field.insert('end', '\n')
+        if kwargs.get('newline', True):
+            self.field.insert('end', '\n')
         self.field.see('end')
 
     def print_error(self, fmt, *args):
         self.print_(fmt, *args, tags=('error',))
+
+    def input(self, func, prompt=''):
+        self.print_(prompt, newline=False)
+        self.input_active = True
+        self.input_func = func
+        self.input_callback = func.callback
+        self.input_prompt = prompt
+
+    def input_submit(self, event):
+        if not self.input_active:
+            return 'break'
+        line = self.field.get(1.0, 'end').split('\n')[-2]
+        if not line.startswith(self.input_prompt):
+            self.raise_error(Exception('Prompt missing'), self.input_func.lineno)
+        line = line[len(self.input_prompt):]
+        print(line)
+        self.input_callback(line)
+        self.input_active = False
+        self.input_callback = None
 
 def init():
     global root
