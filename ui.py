@@ -53,9 +53,14 @@ class Console(tk.Toplevel):
         }
         self.field = tk.Text(self)
         self.field.grid(row=2, column=1, sticky='nsew')
+        self.field.bind('<Key>', lambda e: 'break')
         self.input_active = False
-        self.field.bind('<Return>', self.input_submit)
         self.field.tag_config('error', foreground='red')
+        self.input_label = tk.Label(self)
+        self.input_label.grid(row=3, column=1)
+        self.input_field = tk.Text(self, height=1, state='disabled')
+        self.input_field.grid(row=4, column=1, sticky='ew')
+        self.input_field.bind('<Return>', self.input_submit)
         self.func_queue = queue.Queue()
 
     def run(self, code):
@@ -113,23 +118,22 @@ class Console(tk.Toplevel):
         self.print_(fmt, *args, tags=('error',))
 
     def input(self, func, prompt=''):
-        self.print_(prompt, newline=False)
         self.input_active = True
         self.input_func = func
         self.input_callback = func.callback
-        self.input_prompt = prompt
+        self.input_label.config(text=prompt)
+        self.input_field.config(state='normal')
+        self.input_field.focus()
 
     def input_submit(self, event):
         if not self.input_active:
             return 'break'
-        line = self.field.get(1.0, 'end').split('\n')[-2]
-        if not line.startswith(self.input_prompt):
-            self.raise_error(Exception('Prompt missing'), self.input_func.lineno)
-        line = line[len(self.input_prompt):]
-        print(line)
-        self.input_callback(line)
+        self.input_callback(self.input_field.get(1.0, 'end').rstrip('\r\n'))
         self.input_active = False
         self.input_callback = None
+        self.input_field.delete(1.0, 'end')
+        self.input_label.config(text='')
+        self.input_field.config(state='disabled')
 
 def init():
     global root
